@@ -29,6 +29,7 @@ export type UpdateUserRequest = {
 export type TokenResponse = {
   access_token: string;
   token_type: "bearer" | string;
+  user: User;
 };
 
 export type TokenPayload = {

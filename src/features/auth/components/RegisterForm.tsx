@@ -4,7 +4,7 @@ import { UserPlus } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LoadingSpinner } from "../../../components/common/LoadingSpinner";
-import { apiClient } from "../../../lib/axios";
+import { createUser } from "../services/authService";
 
 interface RegisterFormProps {
   onError: (error: string | null) => void;
@@ -31,7 +31,7 @@ export function RegisterForm({ onError }: RegisterFormProps) {
     onError(null);
 
     try {
-      await apiClient.post("/users", { name, password });
+      await createUser({ name, password });
       setSuccessMessage("User registered successfully");
       setPassword("");
       setName("");

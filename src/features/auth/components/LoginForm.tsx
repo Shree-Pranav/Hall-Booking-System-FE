@@ -1,10 +1,11 @@
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LogIn } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LoadingSpinner } from "../../../components/common/LoadingSpinner";
-import { apiClient } from "../../../lib/axios";
+import { useAuth } from "../../../context/AuthContext";
+import { login } from "../services/authService";
 
 interface LoginFormProps {
   onError: (error: string | null) => void;
@@ -15,6 +16,7 @@ export function LoginForm({ onError }: LoginFormProps) {
   const [password, setPassword] = useState("admin");
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { login: setAuthenticatedUser } = useAuth();
 
   useEffect(() => {
     if (successMessage) {
@@ -31,22 +33,9 @@ export function LoginForm({ onError }: LoginFormProps) {
     onError(null);
 
     try {
-      const formData = new URLSearchParams();
-      formData.set("username", username);
-      formData.set("password", password);
-
-      await apiClient.post("/auth/login", formData, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      });
-
-      const role = username === "admin" ? "Admin" : "User";
-      setSuccessMessage(`${role} logged in successfully`);
-      localStorage.setItem(
-        "user_role",
-        username === "admin" ? "admin" : "user",
-      );
+      const response = await login({ username, password });
+      setAuthenticatedUser(response.user);
+      setSuccessMessage(`${response.user.name} logged in successfully`);
     } catch (error: any) {
       onError(error.response?.data?.detail || "Login failed");
     } finally {

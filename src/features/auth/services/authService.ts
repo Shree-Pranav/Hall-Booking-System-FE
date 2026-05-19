@@ -27,3 +27,16 @@ export async function login(payload: LoginRequest): Promise<TokenResponse> {
   );
   return response.data;
 }
+
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const response = await apiClient.get<User>("/auth/me");
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      return null;
+    }
+
+    throw error;
+  }
+}

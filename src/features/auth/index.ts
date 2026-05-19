@@ -1,4 +1,5 @@
-export * from "./hooks/useAuth";
+export * from "./components/LoginForm";
+export * from "./components/RegisterForm";
 export * from "./pages/AuthDashboardPage";
-export * from "./slices/authSlice";
+export * from "./services/authService";
 export * from "./types/auth.types";
