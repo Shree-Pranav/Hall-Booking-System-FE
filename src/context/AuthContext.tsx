@@ -7,7 +7,10 @@ import {
   type ReactNode,
 } from "react";
 
-import { getCurrentUser } from "../features/auth/services/authService";
+import {
+  getCurrentUser,
+  logout as logoutService,
+} from "../features/auth/services/authService";
 import type { User } from "../features/auth/types/auth.types";
 
 type AuthContextValue = {
@@ -15,7 +18,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isHydrating: boolean;
   login: (user: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -57,7 +60,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: user !== null,
       isHydrating,
       login: setUser,
-      logout: () => setUser(null),
+      logout: async () => {
+        try {
+          await logoutService();
+        } finally {
+          setUser(null);
+        }
+      },
     }),
     [isHydrating, user],
   );
