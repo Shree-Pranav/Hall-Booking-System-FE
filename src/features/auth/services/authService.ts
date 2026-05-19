@@ -40,3 +40,7 @@ export async function getCurrentUser(): Promise<User | null> {
     throw error;
   }
 }
+
+export async function logout(): Promise<void> {
+  await apiClient.post("/auth/logout");
+}

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { LogIn } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -17,6 +18,7 @@ export function LoginForm({ onError }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { login: setAuthenticatedUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (successMessage) {
@@ -36,6 +38,8 @@ export function LoginForm({ onError }: LoginFormProps) {
       const response = await login({ username, password });
       setAuthenticatedUser(response.user);
       setSuccessMessage(`${response.user.name} logged in successfully`);
+      // navigate to root which will redirect based on role
+      navigate("/", { replace: true });
     } catch (error: any) {
       onError(error.response?.data?.detail || "Login failed");
     } finally {
