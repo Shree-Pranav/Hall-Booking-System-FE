@@ -18,7 +18,7 @@ export function AppShell({ children }: AppShellProps) {
             <p>
               {user
                 ? `Signed in as ${user.name} (${user.role})`
-                : "Sign in to access protected hall endpoints."}
+                : "Sign in to access hall info."}
             </p>
           ) : null}
         </div>

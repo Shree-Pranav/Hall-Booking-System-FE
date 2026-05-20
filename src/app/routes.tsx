@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthDashboardPage } from "../features/auth/pages/AuthDashboardPage";
 import AdminDashboardPage from "../features/halls/pages/AdminDashboardPage";
+import FacilitiesPage from "../features/halls/pages/FacilitiesPage";
 import UserDashboardPage from "../features/halls/pages/UserDashboardPage";
 import { useAuth } from "../context/AuthContext";
 
@@ -29,6 +30,7 @@ export function AppRoutes() {
       />
 
       <Route path="/admin" element={<AdminDashboardPage />} />
+      <Route path="/admin/facilities" element={<FacilitiesPage />} />
       <Route path="/user" element={<UserDashboardPage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
