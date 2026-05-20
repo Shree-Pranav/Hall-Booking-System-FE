@@ -9,6 +9,11 @@ import {
   updateHall,
   deleteHall,
 } from "../services/hallsService";
+import {
+  listFacilities,
+  addFacilityToHall,
+  modifyHallFacility,
+} from "../services/hallsService";
 
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
@@ -18,6 +23,12 @@ export default function AdminDashboardPage() {
   const [capacity, setCapacity] = useState(0);
   const [floor, setFloor] = useState(0);
   const [editing, setEditing] = useState<Hall | null>(null);
+  const [facilities, setFacilities] = useState<{ id: number; name: string }[]>(
+    [],
+  );
+  const [selectedFacilities, setSelectedFacilities] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     void load();
@@ -26,6 +37,15 @@ export default function AdminDashboardPage() {
   async function load() {
     const data = await listHalls();
     setHalls(data);
+  }
+
+  useEffect(() => {
+    void loadFacilities();
+  }, []);
+
+  async function loadFacilities() {
+    const f = await listFacilities();
+    setFacilities(f);
   }
 
   if (!user) return <Navigate to="/" replace />;
@@ -40,10 +60,17 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!name || capacity <= 0 || floor < 0) return;
     const created = await createHall({ name, capacity, floor });
-    setHalls((s) => [created, ...s]);
+    // attach selected facilities
+    for (const fac of Array.from(selectedFacilities)) {
+      await addFacilityToHall(fac, created.name);
+    }
+    // reload halls
+    const data = await listHalls();
+    setHalls(data);
     setName("");
     setCapacity(0);
     setFloor(0);
+    setSelectedFacilities(new Set());
   }
 
   async function handleDelete(id: string) {
@@ -56,22 +83,78 @@ export default function AdminDashboardPage() {
     setName(hall.name);
     setCapacity(hall.capacity);
     setFloor(hall.floor);
+    // prefill selected facilities from hall
+    const active = new Set<string>();
+    (hall.facilities ?? []).forEach((hf) => {
+      if (hf.is_active) active.add(hf.facility.name);
+    });
+    setSelectedFacilities(active);
   }
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
     if (!editing || !name || capacity <= 0 || floor < 0) return;
     const updated = await updateHall(editing.id, { name, capacity, floor });
-    setHalls((s) => s.map((h) => (h.id === updated.id ? updated : h)));
+    // compare facilities and apply changes
+    const prevActive = new Set<string>(
+      (editing.facilities ?? [])
+        .filter((f) => f.is_active)
+        .map((f) => f.facility.name),
+    );
+    const nowSelected = selectedFacilities;
+
+    // newly added
+    for (const facName of Array.from(nowSelected)) {
+      if (!prevActive.has(facName)) {
+        await addFacilityToHall(facName, updated.name);
+      }
+    }
+    // removed
+    for (const facName of Array.from(prevActive)) {
+      if (!nowSelected.has(facName)) {
+        await modifyHallFacility(facName, updated.name, false);
+      }
+    }
+
+    const data = await listHalls();
+    setHalls((s) => data);
     setEditing(null);
     setName("");
     setCapacity(0);
     setFloor(0);
+    setSelectedFacilities(new Set());
+  }
+
+  function toggleFacility(name: string) {
+    setSelectedFacilities((s) => {
+      const copy = new Set(Array.from(s));
+      if (copy.has(name)) copy.delete(name);
+      else copy.add(name);
+      return copy;
+    });
   }
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
       <h2 style={{ color: "#333", marginBottom: 20 }}>Admin Dashboard</h2>
+      <div style={{ marginBottom: 12 }}>
+        <button
+          onClick={() => navigate("/admin/facilities")}
+          style={{
+            padding: "6px 12px",
+            backgroundColor: "#17a2b8",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: "0.9em",
+            fontWeight: 500,
+            marginBottom: 12,
+          }}
+        >
+          Manage Facilities
+        </button>
+      </div>
       <div
         style={{
           padding: 12,
@@ -222,6 +305,28 @@ export default function AdminDashboardPage() {
                 Cancel
               </button>
             ) : null}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label
+              style={{ display: "block", marginBottom: 6, fontWeight: 600 }}
+            >
+              Facilities
+            </label>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {facilities.map((f) => (
+                <label
+                  key={f.id}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedFacilities.has(f.name)}
+                    onChange={() => toggleFacility(f.name)}
+                  />
+                  {f.name}
+                </label>
+              ))}
+            </div>
           </div>
         </form>
       </section>
