@@ -24,7 +24,10 @@ import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../context/AuthContext";
 import { AppShell } from "../../../layouts/AppShell";
 import { getApiErrorMessage } from "../../../services/apiError";
-import { listFavoriteHalls, listHalls } from "../../halls/services/hallsService";
+import {
+  listFavoriteHalls,
+  listHalls,
+} from "../../halls/services/hallsService";
 import type { FavoriteHall, Hall } from "../../halls/services/hallsService";
 import {
   bookHall,
@@ -163,7 +166,9 @@ function formatDuration(minutes: number) {
   if (minutes === 30) return "30 minutes";
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return remainder ? `${hours} hr ${remainder} min` : `${hours} hour${hours > 1 ? "s" : ""}`;
+  return remainder
+    ? `${hours} hr ${remainder} min`
+    : `${hours} hour${hours > 1 ? "s" : ""}`;
 }
 
 type SlotCell = {
@@ -295,6 +300,33 @@ export default function BookingsPage() {
   useEffect(() => {
     void loadInitialData();
   }, [loadInitialData]);
+
+  useEffect(() => {
+    if (user?.role !== "user" || isAdminRoute) return;
+
+    const onHallDisabled = () => {
+      void (async () => {
+        await loadInitialData();
+        if (searchResults !== null) {
+          await runAvailabilitySearch();
+        }
+        setActionSuccess(
+          "Your bookings were refreshed after a hall status update.",
+        );
+      })();
+    };
+
+    window.addEventListener("hall-disabled", onHallDisabled);
+    return () => {
+      window.removeEventListener("hall-disabled", onHallDisabled);
+    };
+  }, [
+    user?.role,
+    isAdminRoute,
+    loadInitialData,
+    runAvailabilitySearch,
+    searchResults,
+  ]);
 
   useEffect(() => {
     const minimumDate = getMinimumSearchDate();
@@ -473,7 +505,9 @@ export default function BookingsPage() {
       !isHalfHourDateTimeValue(draft.end)
     ) {
       setActionSuccess(null);
-      setActionError("Bookings can only start and end on the hour or half hour.");
+      setActionError(
+        "Bookings can only start and end on the hour or half hour.",
+      );
       return;
     }
 
@@ -682,23 +716,29 @@ export default function BookingsPage() {
               Search by date and hall to see all half-hour slots.
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="empty-state">No available halls match this search.</div>
+            <div className="empty-state">
+              No available halls match this search.
+            </div>
           ) : (
             <div className="availability-results">
               {searchResults.map((hall) => {
                 const slotCells = buildSlotCells(hall);
-                const bookableCount = slotCells.filter((slot) => slot.isAvailable).length;
+                const bookableCount = slotCells.filter(
+                  (slot) => slot.isAvailable,
+                ).length;
                 const selectedSlots = getSelectedSlots(hall.hall_id, slotCells);
                 const canBookSelection = selectedRangeIsAvailable(
                   hall.hall_id,
                   slotCells,
                 );
                 const selectedStart = selectedSlots[0]?.start;
-                const selectedEnd = selectedSlots[selectedSlots.length - 1]?.end;
+                const selectedEnd =
+                  selectedSlots[selectedSlots.length - 1]?.end;
                 const selectedMinutes =
                   selectedStart && selectedEnd
                     ? Math.round(
-                        (selectedEnd.getTime() - selectedStart.getTime()) / 60000,
+                        (selectedEnd.getTime() - selectedStart.getTime()) /
+                          60000,
                       )
                     : 0;
                 return (
@@ -735,7 +775,9 @@ export default function BookingsPage() {
                             isLoading ||
                             isSearching
                           }
-                          onClick={() => handleSelectedSlotBooking(hall, slotCells)}
+                          onClick={() =>
+                            handleSelectedSlotBooking(hall, slotCells)
+                          }
                         >
                           {bookingSlotKey ? "Booking" : "Book selected"}
                         </Button>

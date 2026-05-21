@@ -28,6 +28,19 @@ export default function UserDashboardPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (user?.role !== "user") return;
+
+    const onHallDisabled = () => {
+      void load();
+    };
+
+    window.addEventListener("hall-disabled", onHallDisabled);
+    return () => {
+      window.removeEventListener("hall-disabled", onHallDisabled);
+    };
+  }, [user?.role]);
+
   async function load() {
     setIsLoading(true);
     setError(null);
