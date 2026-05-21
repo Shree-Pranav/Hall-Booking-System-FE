@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import axios from "axios";
 import { LogIn } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,11 +11,12 @@ import { login } from "../services/authService";
 
 interface LoginFormProps {
   onError: (error: string | null) => void;
+  onShowRegister?: () => void;
 }
 
-export function LoginForm({ onError }: LoginFormProps) {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin");
+export function LoginForm({ onError, onShowRegister }: LoginFormProps) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { login: setAuthenticatedUser } = useAuth();
@@ -40,8 +42,11 @@ export function LoginForm({ onError }: LoginFormProps) {
       setSuccessMessage(`${response.user.name} logged in successfully`);
       // navigate to root which will redirect based on role
       navigate("/", { replace: true });
-    } catch (error: any) {
-      onError(error.response?.data?.detail || "Login failed");
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail
+        : null;
+      onError(detail || "Login failed");
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +62,7 @@ export function LoginForm({ onError }: LoginFormProps) {
 
       {successMessage ? (
         <div className="success" role="status">
-          ✓ {successMessage}
+          Success: {successMessage}
         </div>
       ) : null}
 
@@ -84,6 +89,14 @@ export function LoginForm({ onError }: LoginFormProps) {
       >
         Login
       </Button>
+      {onShowRegister ? (
+        <div className="auth-switch">
+          <span>New to hall booking?</span>
+          <Button type="button" variant="secondary" onClick={onShowRegister}>
+            Sign up
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

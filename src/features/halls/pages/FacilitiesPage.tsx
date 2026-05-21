@@ -1,212 +1,239 @@
-import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { FormEvent, useEffect, useState } from "react";
+import { ArrowLeft, Link2, MinusCircle, Plus } from "lucide-react";
+import { Navigate, useNavigate } from "react-router-dom";
+
+import { Button } from "../../../components/ui/Button";
+import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../context/AuthContext";
+import { AppShell } from "../../../layouts/AppShell";
+import { getApiErrorMessage } from "../../../services/apiError";
 import {
   listFacilities,
   createFacility,
   listHalls,
   addFacilityToHall,
-  modifyHallFacility,
+  removeFacilityFromHall,
 } from "../services/hallsService";
 import type { Facility, Hall } from "../services/hallsService";
 
 export default function FacilitiesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
   const [name, setName] = useState("");
-  const [selectedFacility, setSelectedFacility] = useState<string>("");
-  const [selectedHall, setSelectedHall] = useState<string>("");
+  const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(
+    null,
+  );
+  const [selectedHallId, setSelectedHallId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
   }, []);
 
   async function load() {
-    const f = await listFacilities();
-    setFacilities(f);
-    const hs = await listHalls();
-    setHalls(hs);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [facilityData, hallData] = await Promise.all([
+        listFacilities(),
+        listHalls(),
+      ]);
+      setFacilities(facilityData);
+      setHalls(hallData);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   if (!user) return <Navigate to="/" replace />;
   if (user.role !== "admin") return <Navigate to="/user" replace />;
 
-  async function handleCreate(e: React.FormEvent) {
+  const selectedFacility =
+    selectedFacilityId === null
+      ? null
+      : (facilities.find((facility) => facility.id === selectedFacilityId) ??
+        null);
+  const selectedHall =
+    selectedHallId === null
+      ? null
+      : (halls.find((hall) => hall.id === selectedHallId) ?? null);
+
+  async function handleCreate(e: FormEvent) {
     e.preventDefault();
     if (!name) return;
-    await createFacility({ name });
-    setName("");
-    await load();
+    setError(null);
+    try {
+      await createFacility({ name });
+      setName("");
+      await load();
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
   }
 
   async function handleAddToHall() {
     if (!selectedFacility || !selectedHall) return;
-    await addFacilityToHall(selectedFacility, selectedHall);
-    await load();
+    setError(null);
+    try {
+      await addFacilityToHall(selectedFacility.name, selectedHall.name);
+      await load();
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
   }
 
   async function handleRemoveFromHall() {
     if (!selectedFacility || !selectedHall) return;
-    await modifyHallFacility(selectedFacility, selectedHall, false);
-    await load();
+    setError(null);
+    try {
+      await removeFacilityFromHall(selectedFacility.name, selectedHall.name);
+      await load();
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ color: "#333", marginBottom: 20 }}>Facilities</h2>
-
-      <section
-        style={{
-          padding: 16,
-          marginBottom: 24,
-          borderRadius: 4,
-          border: "1px solid #ddd",
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Add facility</h3>
-        <form
-          onSubmit={handleCreate}
-          style={{ display: "flex", gap: 12, alignItems: "center" }}
-        >
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Facility name"
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #ccc",
-              borderRadius: 4,
-              fontSize: "1em",
-              flex: 1,
-            }}
-          />
-          <button
-            type="submit"
-            style={{
-              padding: "8px 14px",
-              backgroundColor: "#28a745",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Add
-          </button>
-        </form>
-      </section>
-
-      <section
-        style={{
-          padding: 16,
-          marginBottom: 24,
-          borderRadius: 4,
-          border: "1px solid #ddd",
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Manage facility mappings</h3>
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            marginTop: 8,
-          }}
-        >
-          <select
-            value={selectedFacility}
-            onChange={(e) => setSelectedFacility(e.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 4,
-              border: "1px solid #ccc",
-            }}
-          >
-            <option value="">Select facility</option>
-            {facilities.map((f) => (
-              <option key={f.id} value={f.name}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedHall}
-            onChange={(e) => setSelectedHall(e.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 4,
-              border: "1px solid #ccc",
-            }}
-          >
-            <option value="">Select hall</option>
-            {halls.map((h) => (
-              <option key={h.id} value={h.name}>
-                {h.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={handleAddToHall}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-            }}
-          >
-            Add to hall
-          </button>
-          <button
-            onClick={handleRemoveFromHall}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-            }}
-          >
-            Remove from hall
-          </button>
+    <AppShell>
+      <section className="page-toolbar">
+        <div>
+          <p className="eyebrow">Admin tools</p>
+          <h2>Facilities</h2>
         </div>
+        <Button
+          type="button"
+          variant="secondary"
+          icon={<ArrowLeft size={16} />}
+          onClick={() => navigate("/admin")}
+        >
+          Back to Dashboard
+        </Button>
       </section>
 
-      <section
-        style={{
-          padding: 16,
-          borderRadius: 4,
-          border: "1px solid #ddd",
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>All facilities</h3>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {facilities.map((f) => (
-            <li
-              key={f.id}
-              style={{
-                padding: 10,
-                borderRadius: 4,
-                border: "1px solid #eee",
-                marginBottom: 8,
-                background: "#fafafa",
-              }}
-            >
-              {f.name}
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+      {error ? (
+        <div className="alert" role="alert">
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {isLoading ? (
+        <div className="empty-state">Loading facilities...</div>
+      ) : null}
+
+      <div className="dashboard-grid">
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Catalog</p>
+              <h2>Add facility</h2>
+            </div>
+          </div>
+          <form className="inline-form" onSubmit={handleCreate}>
+            <Input
+              label="Facility name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              placeholder="Projector, Wi-Fi, Stage"
+              disabled={isLoading}
+            />
+            <Button type="submit" icon={<Plus size={16} />}>
+              Add
+            </Button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Mappings</p>
+              <h2>Assign to hall</h2>
+            </div>
+          </div>
+          <div className="form-stack">
+            <label className="field">
+              <span className="field__label">Facility</span>
+              <select
+                className="field__input"
+                value={selectedFacilityId ?? ""}
+                onChange={(e) =>
+                  setSelectedFacilityId(
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
+                disabled={isLoading}
+              >
+                <option value="">Select facility</option>
+                {facilities.map((facility) => (
+                  <option key={facility.id} value={facility.id}>
+                    {facility.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field__label">Hall</span>
+              <select
+                className="field__input"
+                value={selectedHallId ?? ""}
+                onChange={(e) => setSelectedHallId(e.target.value || null)}
+                disabled={isLoading}
+              >
+                <option value="">Select hall</option>
+                {halls.map((hall) => (
+                  <option key={hall.id} value={hall.id}>
+                    {hall.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="button-row">
+              <Button
+                type="button"
+                icon={<Link2 size={16} />}
+                onClick={handleAddToHall}
+                disabled={isLoading}
+              >
+                Add to hall
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                icon={<MinusCircle size={16} />}
+                onClick={handleRemoveFromHall}
+                disabled={isLoading}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel panel--wide">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">All records</p>
+              <h2>All facilities</h2>
+            </div>
+            <span className="status-pill">{facilities.length} total</span>
+          </div>
+          {facilities.length === 0 ? (
+            <div className="empty-state">No facilities found.</div>
+          ) : (
+            <ul className="facility-list">
+              {facilities.map((facility) => (
+                <li key={facility.id}>{facility.name}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </AppShell>
   );
 }

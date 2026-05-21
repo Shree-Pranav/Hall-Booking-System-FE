@@ -1,18 +1,29 @@
-import React, { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  Building2,
+  CalendarDays,
+  LogOut,
+  Plus,
+  Save,
+  Settings,
+  X,
+} from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
+
+import { Button } from "../../../components/ui/Button";
+import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../context/AuthContext";
+import { AppShell } from "../../../layouts/AppShell";
+import { getApiErrorMessage } from "../../../services/apiError";
 import { HallList } from "../components/HallList";
 import type { Hall } from "../services/hallsService";
 import {
   listHalls,
   createHall,
   updateHall,
-  deleteHall,
-} from "../services/hallsService";
-import {
   listFacilities,
   addFacilityToHall,
-  modifyHallFacility,
+  removeFacilityFromHall,
 } from "../services/hallsService";
 
 export default function AdminDashboardPage() {
@@ -26,56 +37,75 @@ export default function AdminDashboardPage() {
   const [facilities, setFacilities] = useState<{ id: number; name: string }[]>(
     [],
   );
-  const [selectedFacilities, setSelectedFacilities] = useState<Set<string>>(
+  const [selectedFacilities, setSelectedFacilities] = useState<Set<number>>(
     new Set(),
   );
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
   }, []);
 
   async function load() {
-    const data = await listHalls();
-    setHalls(data);
-  }
-
-  useEffect(() => {
-    void loadFacilities();
-  }, []);
-
-  async function loadFacilities() {
-    const f = await listFacilities();
-    setFacilities(f);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [hallData, facilityData] = await Promise.all([
+        listHalls(),
+        listFacilities(),
+      ]);
+      setHalls(hallData);
+      setFacilities(facilityData);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   if (!user) return <Navigate to="/" replace />;
   if (user.role !== "admin") return <Navigate to="/user" replace />;
 
   async function handleLogout() {
-    await logout();
-    navigate("/", { replace: true });
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: FormEvent) {
     e.preventDefault();
     if (!name || capacity <= 0 || floor < 0) return;
-    const created = await createHall({ name, capacity, floor });
-    // attach selected facilities
-    for (const fac of Array.from(selectedFacilities)) {
-      await addFacilityToHall(fac, created.name);
+    setError(null);
+    try {
+      const created = await createHall({ name, capacity, floor });
+      for (const facilityId of Array.from(selectedFacilities)) {
+        const facility = facilities.find((item) => item.id === facilityId);
+        if (facility) {
+          await addFacilityToHall(facility.name, created.name);
+        }
+      }
+      await load();
+      setName("");
+      setCapacity(0);
+      setFloor(0);
+      setSelectedFacilities(new Set());
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
     }
-    // reload halls
-    const data = await listHalls();
-    setHalls(data);
-    setName("");
-    setCapacity(0);
-    setFloor(0);
-    setSelectedFacilities(new Set());
   }
 
-  async function handleDelete(id: string) {
-    await deleteHall(id);
-    setHalls((s) => s.filter((h) => h.id !== id));
+  async function handleToggleHallActive(hall: Hall) {
+    setError(null);
+    try {
+      await updateHall(hall.id, { is_active: !hall.is_active });
+      await load();
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
   }
 
   async function handleEdit(hall: Hall) {
@@ -83,41 +113,65 @@ export default function AdminDashboardPage() {
     setName(hall.name);
     setCapacity(hall.capacity);
     setFloor(hall.floor);
-    // prefill selected facilities from hall
-    const active = new Set<string>();
+    const active = new Set<number>();
     (hall.facilities ?? []).forEach((hf) => {
-      if (hf.is_active) active.add(hf.facility.name);
+      if (hf.is_active) active.add(hf.facility.id);
     });
     setSelectedFacilities(active);
   }
 
-  async function handleUpdate(e: React.FormEvent) {
+  async function handleUpdate(e: FormEvent) {
     e.preventDefault();
     if (!editing || !name || capacity <= 0 || floor < 0) return;
-    const updated = await updateHall(editing.id, { name, capacity, floor });
-    // compare facilities and apply changes
-    const prevActive = new Set<string>(
-      (editing.facilities ?? [])
-        .filter((f) => f.is_active)
-        .map((f) => f.facility.name),
-    );
-    const nowSelected = selectedFacilities;
+    setError(null);
+    try {
+      const updated = await updateHall(editing.id, { name, capacity, floor });
+      const prevActive = new Set<number>(
+        (editing.facilities ?? [])
+          .filter((f) => f.is_active)
+          .map((f) => f.facility.id),
+      );
+      const nowSelected = selectedFacilities;
 
-    // newly added
-    for (const facName of Array.from(nowSelected)) {
-      if (!prevActive.has(facName)) {
-        await addFacilityToHall(facName, updated.name);
+      for (const facilityId of Array.from(nowSelected)) {
+        if (!prevActive.has(facilityId)) {
+          const facility = facilities.find((item) => item.id === facilityId);
+          if (facility) {
+            await addFacilityToHall(facility.name, updated.name);
+          }
+        }
       }
-    }
-    // removed
-    for (const facName of Array.from(prevActive)) {
-      if (!nowSelected.has(facName)) {
-        await modifyHallFacility(facName, updated.name, false);
-      }
-    }
 
-    const data = await listHalls();
-    setHalls((s) => data);
+      for (const facilityId of Array.from(prevActive)) {
+        if (!nowSelected.has(facilityId)) {
+          const facility = facilities.find((item) => item.id === facilityId);
+          if (facility) {
+            await removeFacilityFromHall(facility.name, updated.name);
+          }
+        }
+      }
+
+      await load();
+      setEditing(null);
+      setName("");
+      setCapacity(0);
+      setFloor(0);
+      setSelectedFacilities(new Set());
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err));
+    }
+  }
+
+  function toggleFacility(id: number) {
+    setSelectedFacilities((s) => {
+      const copy = new Set(Array.from(s));
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
+      return copy;
+    });
+  }
+
+  function resetForm() {
     setEditing(null);
     setName("");
     setCapacity(0);
@@ -125,221 +179,160 @@ export default function AdminDashboardPage() {
     setSelectedFacilities(new Set());
   }
 
-  function toggleFacility(name: string) {
-    setSelectedFacilities((s) => {
-      const copy = new Set(Array.from(s));
-      if (copy.has(name)) copy.delete(name);
-      else copy.add(name);
-      return copy;
-    });
-  }
-
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ color: "#333", marginBottom: 20 }}>Admin Dashboard</h2>
-      <div style={{ marginBottom: 12 }}>
-        <button
-          onClick={() => navigate("/admin/facilities")}
-          style={{
-            padding: "6px 12px",
-            backgroundColor: "#17a2b8",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: "0.9em",
-            fontWeight: 500,
-            marginBottom: 12,
-          }}
-        >
-          Manage Facilities
-        </button>
-      </div>
-      <div
-        style={{
-          padding: 12,
-          marginBottom: 20,
-          borderRadius: 4,
-          backgroundColor: "#e7f3ff",
-          borderLeft: "4px solid #2196F3",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <p style={{ margin: 0 }}>
-          <strong>{user.name}</strong> — {user.role}
-        </p>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: "6px 12px",
-            backgroundColor: "#dc3545",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: "0.9em",
-            fontWeight: 500,
-          }}
-        >
-          Logout
-        </button>
-      </div>
+    <AppShell>
+      <section className="page-toolbar">
+        <div>
+          <p className="eyebrow">Admin dashboard</p>
+          <h2>Hall operations</h2>
+        </div>
+        <div className="toolbar-actions">
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<CalendarDays size={16} />}
+            onClick={() => navigate("/admin/bookings")}
+          >
+            Bookings
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Settings size={16} />}
+            onClick={() => navigate("/admin/facilities")}
+          >
+            Facilities
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            icon={<LogOut size={16} />}
+            onClick={handleLogout}
+            disabled={isLoading}
+          >
+            Logout
+          </Button>
+        </div>
+      </section>
 
-      <section
-        style={{
-          padding: 16,
-          marginBottom: 24,
-          borderRadius: 4,
-          border: "1px solid #ddd",
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>
-          {editing ? "Edit hall" : "Create hall"}
-        </h3>
-        <form onSubmit={editing ? handleUpdate : handleCreate}>
-          <div style={{ marginBottom: 12 }}>
-            <label
-              style={{ display: "block", marginBottom: 4, fontWeight: 500 }}
-            >
-              Hall Name
-            </label>
-            <input
+      {error ? (
+        <div className="alert" role="alert">
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {isLoading ? (
+        <div className="empty-state">Loading dashboard...</div>
+      ) : null}
+
+      <section className="profile-strip profile-strip--admin">
+        <div>
+          <span>Signed in</span>
+          <strong>{user.name}</strong>
+        </div>
+        <span className="status-pill">{user.role}</span>
+      </section>
+
+      <div className="dashboard-grid dashboard-grid--admin">
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Inventory</p>
+              <h2>{editing ? "Edit hall" : "Create hall"}</h2>
+            </div>
+            <span className="panel-icon" aria-hidden="true">
+              <Building2 size={20} />
+            </span>
+          </div>
+
+          <form
+            className="form-stack"
+            onSubmit={editing ? handleUpdate : handleCreate}
+          >
+            <Input
+              label="Hall Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                fontSize: "1em",
-                boxSizing: "border-box",
-              }}
+              disabled={isLoading}
             />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label
-              style={{ display: "block", marginBottom: 4, fontWeight: 500 }}
-            >
-              Capacity
-            </label>
-            <input
-              type="number"
-              value={capacity}
-              onChange={(e) => setCapacity(Number(e.target.value))}
-              min="1"
-              required
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                fontSize: "1em",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label
-              style={{ display: "block", marginBottom: 4, fontWeight: 500 }}
-            >
-              Floor
-            </label>
-            <input
-              type="number"
-              value={floor}
-              onChange={(e) => setFloor(Number(e.target.value))}
-              min="0"
-              required
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                fontSize: "1em",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <button
-              type="submit"
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#28a745",
-                color: "white",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer",
-                fontSize: "1em",
-                fontWeight: 500,
-              }}
-            >
-              {editing ? "Update" : "Create"}
-            </button>
-            {editing ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(null);
-                  setName("");
-                  setCapacity(0);
-                  setFloor(0);
-                }}
-                style={{
-                  marginLeft: 8,
-                  padding: "8px 16px",
-                  backgroundColor: "#6c757d",
-                  color: "white",
-                  border: "none",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  fontSize: "1em",
-                  fontWeight: 500,
-                }}
+            <div className="form-grid">
+              <Input
+                label="Capacity"
+                type="number"
+                value={capacity}
+                onChange={(e) => setCapacity(Number(e.target.value))}
+                min="1"
+                required
+                disabled={isLoading}
+              />
+              <Input
+                label="Floor"
+                type="number"
+                value={floor}
+                onChange={(e) => setFloor(Number(e.target.value))}
+                min="0"
+                required
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="field">
+              <span className="field__label">Facilities</span>
+              <div className="chip-grid">
+                {facilities.map((facility) => (
+                  <label className="choice-chip" key={facility.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFacilities.has(facility.id)}
+                      onChange={() => toggleFacility(facility.id)}
+                      disabled={isLoading}
+                    />
+                    <span>{facility.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="button-row">
+              <Button
+                type="submit"
+                icon={editing ? <Save size={16} /> : <Plus size={16} />}
+                disabled={isLoading}
               >
-                Cancel
-              </button>
-            ) : null}
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <label
-              style={{ display: "block", marginBottom: 6, fontWeight: 600 }}
-            >
-              Facilities
-            </label>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {facilities.map((f) => (
-                <label
-                  key={f.id}
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                {editing ? "Update" : "Create"}
+              </Button>
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<X size={16} />}
+                  onClick={resetForm}
+                  disabled={isLoading}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedFacilities.has(f.name)}
-                    onChange={() => toggleFacility(f.name)}
-                  />
-                  {f.name}
-                </label>
-              ))}
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </section>
+
+        <section className="panel panel--wide">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Directory</p>
+              <h2>Halls</h2>
             </div>
           </div>
-        </form>
-      </section>
-
-      <section>
-        <h3 style={{ marginTop: 0 }}>Halls</h3>
-        <HallList
-          halls={halls}
-          showActions
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-        />
-      </section>
-    </div>
+          {!isLoading ? (
+            <HallList
+              halls={halls}
+              showActions
+              onToggleActive={handleToggleHallActive}
+              onEdit={handleEdit}
+            />
+          ) : null}
+        </section>
+      </div>
+    </AppShell>
   );
 }

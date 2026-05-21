@@ -6,6 +6,10 @@ export type HallCreate = {
   floor: number;
 };
 
+export type HallUpdate = Partial<HallCreate> & {
+  is_active?: boolean;
+};
+
 export type Hall = {
   id: string;
   name: string;
@@ -20,10 +24,19 @@ export type Hall = {
   }[];
 };
 
+type ListHallsResponse = {
+  halls: Hall[];
+  total: number;
+};
+
+export type FavoriteHall = {
+  id: string;
+  name: string;
+};
+
 export async function listHalls(): Promise<Hall[]> {
-  const res = await apiClient.get<{ halls?: Hall[]; total?: number }>("/halls");
-  // backend returns { halls: [...], total: n }
-  return (res.data as any).halls ?? (res.data as any);
+  const res = await apiClient.get<ListHallsResponse | Hall[]>("/halls");
+  return Array.isArray(res.data) ? res.data : res.data.halls;
 }
 
 export async function createHall(payload: HallCreate): Promise<Hall> {
@@ -46,24 +59,36 @@ export async function createFacility(payload: {
 }
 
 export async function addFacilityToHall(
-  facility_name: string,
-  hall_name: string,
+  facilityName: string,
+  hallName: string,
 ): Promise<{ message: string }> {
   const res = await apiClient.post("/halls/add_facility", {
-    facility_name,
-    hall_name,
+    facility_name: facilityName,
+    hall_name: hallName,
+  });
+  return res.data;
+}
+
+export async function removeFacilityFromHall(
+  facilityName: string,
+  hallName: string,
+): Promise<{ message: string }> {
+  const res = await apiClient.patch("/halls/facilities", {
+    facility_name: facilityName,
+    hall_name: hallName,
+    is_active: false,
   });
   return res.data;
 }
 
 export async function modifyHallFacility(
-  facility_name: string,
-  hall_name: string,
+  facilityName: string,
+  hallName: string,
   is_active: boolean,
 ): Promise<{ message: string }> {
   const res = await apiClient.patch("/halls/facilities", {
-    facility_name,
-    hall_name,
+    facility_name: facilityName,
+    hall_name: hallName,
     is_active,
   });
   return res.data;
@@ -82,14 +107,15 @@ export async function removeFavorite(hall_name: string): Promise<void> {
   await apiClient.delete("/favorites/remove/", { params: { hall_name } });
 }
 
-export async function updateHall(
-  id: string,
-  payload: Partial<HallCreate>,
-): Promise<Hall> {
-  const res = await apiClient.patch<Hall>(`/halls/${id}`, payload);
+export async function listFavoriteHalls(): Promise<FavoriteHall[]> {
+  const res = await apiClient.get<FavoriteHall[]>("/favorites/me");
   return res.data;
 }
 
-export async function deleteHall(id: string): Promise<void> {
-  await apiClient.delete(`/halls/${id}`);
+export async function updateHall(
+  id: string,
+  payload: HallUpdate,
+): Promise<Hall> {
+  const res = await apiClient.patch<Hall>(`/halls/${id}`, payload);
+  return res.data;
 }

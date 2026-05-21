@@ -1,161 +1,85 @@
-import React, { useState } from "react";
+import { Layers, UsersRound } from "lucide-react";
+
 import type { Hall } from "../services/hallsService";
-import { useAuth } from "../../../context/AuthContext";
-import { addFavorite, removeFavorite } from "../services/hallsService";
+import { HallActions } from "./HallActions";
 
 type Props = {
   halls: Hall[];
-  onDelete?: (id: string) => void;
+  favoriteHallIds?: Set<string>;
+  onToggleActive?: (hall: Hall) => void;
   onEdit?: (hall: Hall) => void;
   showActions?: boolean;
 };
 
 export function HallList({
   halls,
-  onDelete,
+  favoriteHallIds,
+  onToggleActive,
   onEdit,
   showActions = false,
 }: Props) {
   if (!halls || halls.length === 0) {
-    return <div>No halls found.</div>;
+    return <div className="empty-state">No halls found.</div>;
   }
 
   return (
-    <div className="panel">
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {halls.map((h) => (
-          <li
-            key={h.id}
-            style={{
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 4,
-              border: "1px solid #ddd",
-              backgroundColor: "#f9f9f9",
-            }}
-          >
-            <div style={{ marginBottom: 8 }}>
-              <strong style={{ fontSize: "1.1em" }}>{h.name}</strong>
-            </div>
-            <div style={{ fontSize: "0.9em", color: "#666" }}>
-              Capacity: {h.capacity} | Floor: {h.floor}
-            </div>
-
-            {h.facilities && h.facilities.length > 0 ? (
-              <div style={{ marginTop: 8 }}>
-                <strong>Facilities:</strong>
-                <ul style={{ margin: 4, paddingLeft: 18 }}>
-                  {h.facilities.map((f) => (
-                    <li
-                      key={String(f.facility.id)}
-                      style={{ fontSize: "0.9em" }}
-                    >
-                      {f.facility.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <HallActions
-              hall={h}
-              showActions={showActions}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function HallActions({
-  hall,
-  showActions,
-  onEdit,
-  onDelete,
-}: {
-  hall: Hall;
-  showActions: boolean;
-  onEdit?: (h: Hall) => void;
-  onDelete?: (id: string) => void;
-}) {
-  const { user } = useAuth();
-  const [isFav, setIsFav] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  async function handleAddFav() {
-    setLoading(true);
-    try {
-      await addFavorite(hall.name);
-      setIsFav(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRemoveFav() {
-    setLoading(true);
-    try {
-      await removeFavorite(hall.name);
-      setIsFav(false);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      {user?.role === "user" ? (
-        <button
-          onClick={isFav ? handleRemoveFav : handleAddFav}
-          disabled={loading}
-          style={{
-            padding: "6px 12px",
-            marginRight: 8,
-            backgroundColor: isFav ? "#ffc107" : "#17a2b8",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-          }}
+    <div className="hall-grid">
+      {halls.map((hall) => (
+        <article
+          className={`hall-card ${hall.is_active ? "" : "hall-card--inactive"}`}
+          key={hall.id}
         >
-          {isFav ? "Remove Favorite" : "Add Favorite"}
-        </button>
-      ) : null}
+          <div className="hall-card__header">
+            <div>
+              <p className="eyebrow">Hall</p>
+              <h3>{hall.name}</h3>
+            </div>
+            <div className="hall-card__badges">
+              <span className="hall-card__floor">Floor {hall.floor}</span>
+              {showActions ? (
+                <span
+                  className={`status-pill ${
+                    hall.is_active ? "status-pill--ok" : "status-pill--error"
+                  }`}
+                >
+                  {hall.is_active ? "Enabled" : "Disabled"}
+                </span>
+              ) : null}
+            </div>
+          </div>
 
-      {showActions ? (
-        <>
-          <button
-            onClick={() => onEdit?.(hall)}
-            style={{
-              padding: "6px 12px",
-              marginRight: 8,
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => onDelete?.(hall.id)}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Delete
-          </button>
-        </>
-      ) : null}
+          <div className="hall-card__stats">
+            <span>
+              <UsersRound size={16} aria-hidden="true" />
+              {hall.capacity} seats
+            </span>
+            <span>
+              <Layers size={16} aria-hidden="true" />
+              Level {hall.floor}
+            </span>
+          </div>
+
+          {hall.facilities && hall.facilities.length > 0 ? (
+            <div className="hall-card__facilities">
+              {hall.facilities.map((facility) => (
+                <span key={String(facility.facility.id)}>
+                  {facility.facility.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No facilities assigned.</p>
+          )}
+
+          <HallActions
+            hall={hall}
+            showActions={showActions}
+            initialIsFavorite={favoriteHallIds?.has(hall.id) ?? false}
+            onEdit={onEdit}
+            onToggleActive={onToggleActive}
+          />
+        </article>
+      ))}
     </div>
   );
 }
