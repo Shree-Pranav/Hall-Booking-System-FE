@@ -27,6 +27,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/favorites/, "/favorites"),
       },
+      "/api/bookings": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/bookings/, "/bookings"),
+      },
+      "/api/search": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/search/, "/search"),
+      },
     },
   },
 });

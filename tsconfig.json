@@ -10,9 +10,10 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
+
     "module": "ESNext",
-    "moduleResolution": "Node",
-    "ignoreDeprecations": "5.0",
+    "moduleResolution": "bundler",
+
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

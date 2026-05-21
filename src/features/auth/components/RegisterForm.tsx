@@ -1,4 +1,5 @@
 import { FormEvent, useState, useEffect } from "react";
+import axios from "axios";
 import { UserPlus } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
@@ -8,9 +9,10 @@ import { createUser } from "../services/authService";
 
 interface RegisterFormProps {
   onError: (error: string | null) => void;
+  onShowLogin?: () => void;
 }
 
-export function RegisterForm({ onError }: RegisterFormProps) {
+export function RegisterForm({ onError, onShowLogin }: RegisterFormProps) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -35,8 +37,11 @@ export function RegisterForm({ onError }: RegisterFormProps) {
       setSuccessMessage("User registered successfully");
       setPassword("");
       setName("");
-    } catch (error: any) {
-      onError(error.response?.data?.detail || "Registration failed");
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail
+        : null;
+      onError(detail || "Registration failed");
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +57,7 @@ export function RegisterForm({ onError }: RegisterFormProps) {
 
       {successMessage ? (
         <div className="success" role="status">
-          ✓ {successMessage}
+          Success: {successMessage}
         </div>
       ) : null}
 
@@ -82,6 +87,14 @@ export function RegisterForm({ onError }: RegisterFormProps) {
       >
         Create account
       </Button>
+      {onShowLogin ? (
+        <div className="auth-switch">
+          <span>Already have an account?</span>
+          <Button type="button" variant="secondary" onClick={onShowLogin}>
+            Back to login
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

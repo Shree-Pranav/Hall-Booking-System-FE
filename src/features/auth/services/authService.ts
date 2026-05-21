@@ -1,6 +1,5 @@
-import axios from "axios";
-
 import { env } from "../../../config/env";
+import { createApiClient } from "../../../lib/axios";
 import type {
   CreateUserRequest,
   LoginRequest,
@@ -8,13 +7,7 @@ import type {
   User,
 } from "../types/auth.types";
 
-const authApiClient = axios.create({
-  baseURL: env.authApiBaseUrl,
-  withCredentials: true,
-  headers: {
-    Accept: "application/json",
-  },
-});
+const authApiClient = createApiClient(env.authApiBaseUrl);
 
 export async function createUser(payload: CreateUserRequest): Promise<User> {
   const response = await authApiClient.post<User>("/users", payload);
@@ -42,8 +35,15 @@ export async function getCurrentUser(): Promise<User | null> {
   try {
     const response = await authApiClient.get<User>("/auth/me");
     return response.data;
-  } catch (error: any) {
-    if (error.response?.status === 401) {
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "isAxiosError" in error &&
+      (error as { isAxiosError?: boolean }).isAxiosError &&
+      "response" in error &&
+      (error as { response?: { status?: number } }).response?.status === 401
+    ) {
       return null;
     }
 
