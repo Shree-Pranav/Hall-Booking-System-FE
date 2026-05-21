@@ -33,7 +33,9 @@ export async function login(payload: LoginRequest): Promise<TokenResponse> {
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const response = await authApiClient.get<User>("/auth/me");
+    const response = await authApiClient.get<User>("/auth/me", {
+      skipErrorToast: true,
+    });
     return response.data;
   } catch (error: unknown) {
     if (
