@@ -10,7 +10,6 @@ import { useAuth } from "../context/AuthContext";
 export function AppRoutes() {
   const { user, isHydrating } = useAuth();
 
-  // while hydrating, show nothing
   if (isHydrating) return <></>;
 
   return (

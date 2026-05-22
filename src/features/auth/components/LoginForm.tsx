@@ -40,7 +40,7 @@ export function LoginForm({ onError, onShowRegister }: LoginFormProps) {
       const response = await login({ username, password });
       setAuthenticatedUser(response.user);
       setSuccessMessage(`${response.user.name} logged in successfully`);
-      // navigate to root which will redirect based on role
+
       navigate("/", { replace: true });
     } catch (error: unknown) {
       const detail = axios.isAxiosError<{ detail?: string }>(error)
