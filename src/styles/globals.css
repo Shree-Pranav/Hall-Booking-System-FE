@@ -1102,6 +1102,61 @@ th {
   padding-top: 14px;
 }
 
+.booking-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.booking-card__details {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.booking-detail-list {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.booking-card__slot-details {
+  display: grid;
+  gap: 10px;
+}
+
+.booking-card__details-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.booking-slot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.booking-slot-chip {
+  border: 1px solid #cfe3ff;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1e3a8a;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 0.42rem 0.68rem;
+}
+
+.booking-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

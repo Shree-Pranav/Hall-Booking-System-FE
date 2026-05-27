@@ -34,7 +34,6 @@ import {
   cancelBooking,
   listAllBookings,
   listMyBookings,
-  listUserBookings,
   searchAvailableHalls,
   updateBookingTiming,
 } from "../services/bookingsService";
@@ -171,6 +170,22 @@ function formatDuration(minutes: number) {
     : `${hours} hour${hours > 1 ? "s" : ""}`;
 }
 
+function getBookedSlotLabels(startValue: string, endValue: string) {
+  const bookedSlots: string[] = [];
+  let cursor = parseApiDate(startValue);
+  const end = parseApiDate(endValue);
+
+  while (cursor < end) {
+    const slotEnd = addMinutes(cursor, SLOT_MINUTES);
+    bookedSlots.push(
+      `${formatSlotLabel(cursor)} - ${formatSlotLabel(slotEnd <= end ? slotEnd : end)}`,
+    );
+    cursor = slotEnd;
+  }
+
+  return bookedSlots;
+}
+
 type SlotCell = {
   key: string;
   index: number;
@@ -194,18 +209,22 @@ export default function BookingsPage() {
   const initialSearchState = useMemo(() => getInitialSearchState(), []);
 
   const [halls, setHalls] = useState<Hall[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [favoriteHalls, setFavoriteHalls] = useState<FavoriteHall[]>([]);
   const [hallSearchTerm, setHallSearchTerm] = useState("");
+  const [hallNameFilter, setHallNameFilter] = useState("");
   const [searchDate, setSearchDate] = useState(initialSearchState.date);
   const [searchResults, setSearchResults] = useState<AvailableHall[] | null>(
     null,
   );
   const [bookingSlotKey, setBookingSlotKey] = useState<string | null>(null);
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(
+    null,
+  );
   const [selectedSlotRange, setSelectedSlotRange] =
     useState<SelectedSlotRange>(null);
   const [isSelectingSlots, setIsSelectingSlots] = useState(false);
-  const [userId, setUserId] = useState("");
   const [timingDrafts, setTimingDrafts] = useState<
     Record<string, { start: string; end: string }>
   >({});
@@ -230,6 +249,16 @@ export default function BookingsPage() {
     [halls],
   );
 
+  const bookingStats = useMemo(
+    () => ({
+      total: bookings.length,
+      booked: bookings.filter((booking) => booking.status === "booked").length,
+      cancelled: bookings.filter((booking) => booking.status === "cancelled")
+        .length,
+    }),
+    [bookings],
+  );
+
   const loadInitialData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -239,6 +268,7 @@ export default function BookingsPage() {
 
       if (isAdminRoute) {
         const all = await listAllBookings();
+        setAllBookings(all);
         setBookings(all);
         setTimingDrafts(buildTimingDrafts(all));
         return;
@@ -490,10 +520,22 @@ export default function BookingsPage() {
       setBookings((current) =>
         current.filter((booking) => booking.id !== bookingId),
       );
+      setAllBookings((current) =>
+        current.filter((booking) => booking.id !== bookingId),
+      );
+      setExpandedBookingId((current) =>
+        current === bookingId ? null : current,
+      );
       setActionSuccess("Booking cancelled successfully.");
     } catch (err: unknown) {
       setActionError(getApiErrorMessage(err));
     }
+  }
+
+  function toggleBookingDetails(bookingId: string) {
+    setExpandedBookingId((current) =>
+      current === bookingId ? null : bookingId,
+    );
   }
 
   async function handleTimingUpdate(bookingId: string) {
@@ -542,15 +584,20 @@ export default function BookingsPage() {
     }
   }
 
-  async function handleLoadUserBookings(e: FormEvent) {
+  async function handleFilterBookings(e: FormEvent) {
     e.preventDefault();
-    if (!userId) return;
     setActionError(null);
     setActionSuccess(null);
     try {
-      const rows = await listUserBookings(userId);
+      const normalizedFilter = hallNameFilter.trim().toLowerCase();
+      const rows = normalizedFilter
+        ? allBookings.filter((booking) =>
+            booking.hall_name.toLowerCase().includes(normalizedFilter),
+          )
+        : allBookings;
       setBookings(rows);
       setTimingDrafts(buildTimingDrafts(rows));
+      setExpandedBookingId(null);
     } catch (err: unknown) {
       setActionError(getApiErrorMessage(err));
     }
@@ -560,13 +607,21 @@ export default function BookingsPage() {
     setActionError(null);
     setActionSuccess(null);
     try {
-      const rows = await listAllBookings();
-      setBookings(rows);
-      setTimingDrafts(buildTimingDrafts(rows));
+      setHallNameFilter("");
+      setBookings(allBookings);
+      setTimingDrafts(buildTimingDrafts(allBookings));
+      setExpandedBookingId(null);
     } catch (err: unknown) {
       setActionError(getApiErrorMessage(err));
     }
   }
+
+  useEffect(() => {
+    if (!expandedBookingId) return;
+    if (!bookings.some((booking) => booking.id === expandedBookingId)) {
+      setExpandedBookingId(null);
+    }
+  }, [bookings, expandedBookingId]);
 
   const profileDetails = !isAdminRoute ? (
     <dl className="profile-popover__details">
@@ -847,18 +902,18 @@ export default function BookingsPage() {
           <div className="panel__header">
             <div>
               <p className="eyebrow">Lookup</p>
-              <h2>View user bookings</h2>
+              <h2>Filter bookings</h2>
             </div>
           </div>
           <form
             className="inline-form inline-form--wrap"
-            onSubmit={handleLoadUserBookings}
+            onSubmit={handleFilterBookings}
           >
             <Input
-              label="User ID"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="Paste user ID"
+              label="Hall name"
+              value={hallNameFilter}
+              onChange={(e) => setHallNameFilter(e.target.value)}
+              placeholder="Filter by hall name"
               disabled={isLoading}
             />
             <div className="button-row">
@@ -889,7 +944,19 @@ export default function BookingsPage() {
             <p className="eyebrow">Timeline</p>
             <h2>{isAdminRoute ? "Bookings" : "My bookings"}</h2>
           </div>
-          <span className="status-pill">{bookings.length} total</span>
+          {isAdminRoute ? (
+            <div className="booking-summary-stats">
+              <span className="status-pill">Total {bookingStats.total}</span>
+              <span className="status-pill status-pill--ok">
+                Booked {bookingStats.booked}
+              </span>
+              <span className="status-pill status-pill--error">
+                Cancelled {bookingStats.cancelled}
+              </span>
+            </div>
+          ) : (
+            <span className="status-pill">{bookings.length} total</span>
+          )}
         </div>
 
         {isLoading ? null : bookings.length === 0 ? (
@@ -916,18 +983,95 @@ export default function BookingsPage() {
                     </div>
                   </div>
 
-                  {!isAdminRoute ? (
+                  <div className="booking-card__actions">
                     <Button
                       type="button"
-                      variant="danger"
-                      icon={<XCircle size={16} />}
-                      onClick={() => handleCancel(booking.id)}
-                      disabled={isAdminRoute || isLoading}
+                      variant="secondary"
+                      onClick={() => toggleBookingDetails(booking.id)}
+                      disabled={isLoading}
                     >
-                      Cancel
+                      {expandedBookingId === booking.id
+                        ? "Hide details"
+                        : "View details"}
                     </Button>
-                  ) : null}
+                    {!isAdminRoute ? (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        icon={<XCircle size={16} />}
+                        onClick={() => handleCancel(booking.id)}
+                        disabled={isAdminRoute || isLoading}
+                      >
+                        Cancel
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
+
+                {expandedBookingId === booking.id ? (
+                  <div className="booking-card__details">
+                    <dl className="detail-list booking-detail-list">
+                      <div>
+                        <dt>Hall</dt>
+                        <dd>{booking.hall_name}</dd>
+                      </div>
+                      <div>
+                        <dt>Start</dt>
+                        <dd>{formatDateTime(booking.start_datetime)}</dd>
+                      </div>
+                      <div>
+                        <dt>End</dt>
+                        <dd>{formatDateTime(booking.end_datetime)}</dd>
+                      </div>
+                      <div>
+                        <dt>Duration</dt>
+                        <dd>
+                          {formatDuration(
+                            Math.round(
+                              (parseApiDate(booking.end_datetime).getTime() -
+                                parseApiDate(
+                                  booking.start_datetime,
+                                ).getTime()) /
+                                60000,
+                            ),
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Status</dt>
+                        <dd>
+                          <span className="status-pill">{booking.status}</span>
+                        </dd>
+                      </div>
+                      {isAdminRoute ? (
+                        <div>
+                          <dt>User</dt>
+                          <dd>{booking.user_name ?? booking.user_id}</dd>
+                        </div>
+                      ) : null}
+                      <div>
+                        <dt>Booking ID</dt>
+                        <dd>{booking.id}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="booking-card__slot-details">
+                      <p className="booking-card__details-label">
+                        Booked slots
+                      </p>
+                      <div className="booking-slot-list">
+                        {getBookedSlotLabels(
+                          booking.start_datetime,
+                          booking.end_datetime,
+                        ).map((slotLabel) => (
+                          <span className="booking-slot-chip" key={slotLabel}>
+                            {slotLabel}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 {!isAdminRoute ? (
                   <div className="booking-card__editor">

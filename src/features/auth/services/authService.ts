@@ -1,5 +1,6 @@
 import { env } from "../../../config/env";
 import { createApiClient } from "../../../lib/axios";
+import { clearAccessToken, setAccessToken } from "../../../lib/authToken";
 import type {
   CreateUserRequest,
   LoginRequest,
@@ -28,6 +29,8 @@ export async function login(payload: LoginRequest): Promise<TokenResponse> {
       },
     },
   );
+
+  setAccessToken(response.data.access_token);
   return response.data;
 }
 
@@ -54,5 +57,5 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 export async function logout(): Promise<void> {
-  await authApiClient.post("/auth/logout");
+  clearAccessToken();
 }
