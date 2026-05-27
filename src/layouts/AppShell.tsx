@@ -3,6 +3,8 @@ import { Building2, ShieldCheck, UserRound } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { showToast } from "../components/ui/toast";
+import { env } from "../config/env";
+import { getAccessToken } from "../lib/authToken";
 
 type AppShellProps = {
   children: ReactNode;
@@ -23,9 +25,16 @@ export function AppShell({ children, profileDetails }: AppShellProps) {
       return;
     }
 
-    const source = new EventSource("/api/events/hall-status", {
-      withCredentials: true,
-    });
+    const token = getAccessToken();
+    if (!token) {
+      setNoticeMessage(null);
+      return;
+    }
+
+    const eventUrl = new URL("/events/hall-status", env.bookingApiBaseUrl);
+    eventUrl.searchParams.set("token", token);
+
+    const source = new EventSource(eventUrl.toString());
 
     const handleHallDisabled = (event: MessageEvent) => {
       try {
